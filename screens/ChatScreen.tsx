@@ -19,15 +19,12 @@ import {
   onSnapshot,
   messagesCollection,
   auth,
-  storage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
   signOut,
 } from "../firebase";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../App";
 import { launchImageLibrary } from "react-native-image-picker";
+import RNFS from 'react-native-fs';
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -102,7 +99,7 @@ export default function ChatScreen({ navigation }: Props) {
     }
   };
 
-  // 3) Upload gambar ke Firebase Storage dan simpan URL ke Firestore
+  // 3) Simpan gambar ke penyimpanan lokal dan simpan path ke Firestore
   const sendImageMessage = async () => {
     launchImageLibrary(
       { mediaType: "photo", quality: 0.8 },
@@ -121,27 +118,29 @@ export default function ChatScreen({ navigation }: Props) {
           }
 
           const uri = asset.uri;
-          const filename = `images/${Date.now()}_${Math.random()
+          const filename = `${Date.now()}_${Math.random()
             .toString(36)
             .slice(2)}.jpg`;
 
-          const imgRef = ref(storage, filename);
+          // Buat direktori jika belum ada
+          const dirPath = RNFS.DocumentDirectoryPath + '/images';
+          await RNFS.mkdir(dirPath);
 
-          // Ambil blob dari URI (React Native)
-          const res = await fetch(uri);
-          const blob = await res.blob();
+          // Salin file ke penyimpanan lokal
+          const localPath = dirPath + '/' + filename;
+          await RNFS.copyFile(uri, localPath);
 
-          await uploadBytes(imgRef, blob);
-          const downloadUrl = await getDownloadURL(imgRef);
+          // Path untuk Image component
+          const imageUrl = 'file://' + localPath;
 
           await addDoc(messagesCollection, {
             text: null,
-            imageUrl: downloadUrl,
+            imageUrl: imageUrl,
             userEmail: displayEmail,
             createdAt: serverTimestamp(),
           });
         } catch (err: any) {
-          Alert.alert("Gagal upload gambar", err.message ?? String(err));
+          Alert.alert("Gagal simpan gambar", err.message ?? String(err));
         }
       }
     );
